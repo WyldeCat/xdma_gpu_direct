@@ -238,6 +238,29 @@ err_out:
 	return rv;
 }
 
+#ifdef GPU_DIRECT
+static ssize_t char_sgdma_read_write_nvidia(struct file *file, char __user *buf,
+		size_t count, loff_t *pos, bool write)
+{
+	// TODO
+	return -EINVAL;
+}
+
+static ssize_t char_sgdma_write_nvidia(struct file *file, const char __user *buf,
+                size_t count, loff_t *pos)
+{
+        return char_sgdma_read_write_nvidia(file, (char *)buf, count, pos, 1);
+}
+
+static ssize_t char_sgdma_read_nvidia(struct file *file, char __user *buf,
+		size_t count, loff_t *pos)
+{
+	// TODO
+	return -EINVAL;
+}
+
+#endif /* GPU_DIRECT */
+
 static ssize_t char_sgdma_read_write(struct file *file, char __user *buf,
 		size_t count, loff_t *pos, bool write)
 {
@@ -540,8 +563,13 @@ static const struct file_operations sgdma_fops = {
 	.owner = THIS_MODULE,
 	.open = char_sgdma_open,
 	.release = char_sgdma_close,
+#ifdef GPU_DIRECT
+	.write = char_sgdma_write_nvidia,
+	.read = char_sgdma_read_nvidia,
+#else
 	.write = char_sgdma_write,
 	.read = char_sgdma_read,
+#endif
 	.unlocked_ioctl = char_sgdma_ioctl,
 	.llseek = char_sgdma_llseek,
 };
