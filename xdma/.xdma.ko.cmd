@@ -1,0 +1,1 @@
+cmd_/home/jeesoo/workspace/xdma_gpu_direct/xdma/xdma.ko := ld -r -m elf_x86_64  -z max-page-size=0x200000 -T ./scripts/module-common.lds --build-id  -o /home/jeesoo/workspace/xdma_gpu_direct/xdma/xdma.ko /home/jeesoo/workspace/xdma_gpu_direct/xdma/xdma.o /home/jeesoo/workspace/xdma_gpu_direct/xdma/xdma.mod.o

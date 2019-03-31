@@ -117,6 +117,79 @@ static int check_transfer_align(struct xdma_engine *engine,
 	return 0;
 }
 
+#ifdef GPU_DIRECT
+static inline void xdma_io_cb_release_nvidia(struct xdma_io_cb_nvidia *cb)
+{
+	// TODO
+	return;	
+}
+
+static void char_sgdma_unmap_user_buf_nvidia(struct xdma_io_cb_nvidia *cb,
+	bool write)
+{
+	// TODO
+	return;	
+}
+
+static int char_sgdma_map_user_buf_to_sgl_nvidia(struct xdma_io_cb_nvidia *cb,
+	bool write)
+{
+	// TODO
+	return -EINVAL;
+}
+
+static ssize_t char_sgdma_read_write_nvidia(struct file *file, char __user *buf,
+		size_t count, loff_t *pos, bool write)
+{
+	int rv;
+	ssize_t res = 0;
+	struct xdma_cdev *xcdev = (struct xdma_cdev *)file->private_data;
+	struct xdma_dev *xdev;
+	struct xdma_engine *engine;
+	struct xdma_io_cb_nvidia cb;
+
+	rv = xcdev_check(__func__, xcdev, 1);
+	if (rv < 0)
+		return rv;
+	xdev = xcdev->xdev;
+	engine = xcdev->engine;
+
+	dbg_tfr("file 0x%p, priv 0x%p, buf 0x%p,%llu, pos %llu, W %d, %s.\n",
+		file, file->private_data, buf, (u64)count, (u64)*pos, write,
+		engine->name);
+
+	if ((write && engine->dir != DMA_TO_DEVICE) ||
+	    (!write && engine->dir != DMA_FROM_DEVICE)) {
+		pr_err("r/w mismatch. W %d, dir %d.\n",
+			write, engine->dir);
+		return -EINVAL;
+	}
+
+	rv = check_transfer_align(engine, buf, count, *pos, 1);
+	if (rv) {
+		pr_info("Invalid transfer alignment detected\n");
+		return rv;
+	}
+	// TODO
+	return -EINVAL;
+}
+
+static ssize_t char_sgdma_write_nvidia(struct file *file, const char __user *buf,
+                size_t count, loff_t *pos)
+{
+        return char_sgdma_read_write_nvidia(file, (char *)buf, count, pos, 1);
+}
+
+static ssize_t char_sgdma_read_nvidia(struct file *file, char __user *buf,
+		size_t count, loff_t *pos)
+{
+	// TODO
+	return -EINVAL;
+}
+
+#endif /* GPU_DIRECT */
+
+
 /*
  * Map a user memory range into a scatterlist
  * inspired by vhost_scsi_map_to_sgl()
@@ -237,29 +310,6 @@ err_out:
 
 	return rv;
 }
-
-#ifdef GPU_DIRECT
-static ssize_t char_sgdma_read_write_nvidia(struct file *file, char __user *buf,
-		size_t count, loff_t *pos, bool write)
-{
-	// TODO
-	return -EINVAL;
-}
-
-static ssize_t char_sgdma_write_nvidia(struct file *file, const char __user *buf,
-                size_t count, loff_t *pos)
-{
-        return char_sgdma_read_write_nvidia(file, (char *)buf, count, pos, 1);
-}
-
-static ssize_t char_sgdma_read_nvidia(struct file *file, char __user *buf,
-		size_t count, loff_t *pos)
-{
-	// TODO
-	return -EINVAL;
-}
-
-#endif /* GPU_DIRECT */
 
 static ssize_t char_sgdma_read_write(struct file *file, char __user *buf,
 		size_t count, loff_t *pos, bool write)

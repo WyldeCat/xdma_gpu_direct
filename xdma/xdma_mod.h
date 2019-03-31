@@ -95,4 +95,11 @@ struct xdma_io_cb {
 	struct page **pages;
 };
 
+#ifdef GPU_DIRECT
+struct xdma_io_cb_nvidia {
+	// TODO
+};
+#endif /* ifdef GPU_DIRECT */
+
 #endif /* ifndef __XDMA_MODULE_H__ */
+
