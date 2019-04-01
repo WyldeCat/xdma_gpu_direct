@@ -194,6 +194,7 @@ static int char_sgdma_map_user_buf_to_sgl_nvidia(struct xdma_io_cb_nvidia *cb,
 		unsigned int nbytes = min_t(unsigned int, GPU_BOUND_SIZE - offset, len);
 
 		sg->dma_address = cb->dma_mapping->dma_addresses[i];
+		sg->dma_length = nbytes;
 		sg->offset = offset;
 		sg->length = len;
 
@@ -252,8 +253,8 @@ static ssize_t char_sgdma_read_write_nvidia(struct file *file, char __user *buf,
 	rv = char_sgdma_map_user_buf_to_sgl_nvidia(&cb, write, xdev->pdev);
 	if (rv < 0) return rv;
 
-	res = xdma_xfer_submit_nvidia(xdev, engine->channel, write, *pos,
-		&cb.sgt, 0, sgdma_timeout * 1000);
+	res = xdma_xfer_submit(xdev, engine->channel, write, *pos,
+		&cb.sgt, 1, sgdma_timeout * 1000);
 
 	// TODO unmap sgdma
 
