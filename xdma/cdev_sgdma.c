@@ -702,11 +702,10 @@ static const struct file_operations sgdma_fops = {
 	.release = char_sgdma_close,
 #ifdef GPU_DIRECT
 	.write = char_sgdma_write_nvidia,
-	.read = char_sgdma_read_nvidia,
 #else
 	.write = char_sgdma_write,
-	.read = char_sgdma_read,
 #endif
+	.read = char_sgdma_read,
 	.unlocked_ioctl = char_sgdma_ioctl,
 	.llseek = char_sgdma_llseek,
 };
