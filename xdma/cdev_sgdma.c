@@ -252,7 +252,7 @@ static ssize_t char_sgdma_read_write_nvidia(struct file *file, char __user *buf,
 		return rv;
 
 	// TODO xfer submit, unmap sgdma
-
+	pr_err("end of read write nvidia");
 	return -EINVAL;
 }
 
