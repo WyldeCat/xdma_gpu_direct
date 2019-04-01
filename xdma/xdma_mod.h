@@ -37,6 +37,9 @@
 #include <linux/splice.h>
 #include <linux/version.h>
 #include <linux/uio.h>
+#ifdef GPU_DIRECT
+#include <nv-p2p.h>
+#endif
 
 #include "libxdma.h"
 
@@ -97,7 +100,11 @@ struct xdma_io_cb {
 
 #ifdef GPU_DIRECT
 struct xdma_io_cb_nvidia {
-	// TODO
+	void __user *buf;
+	size_t len;
+	unsigned int pages_nr;
+	struct sg_table sgt;
+	nvidia_p2p_page_table_t *page_table;
 };
 #endif /* ifdef GPU_DIRECT */
 

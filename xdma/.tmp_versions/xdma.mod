@@ -1,2 +1,0 @@
-/home/jeesoo/workspace/xdma_gpu_direct/xdma/xdma.ko
-/home/jeesoo/workspace/xdma_gpu_direct/xdma/libxdma.o /home/jeesoo/workspace/xdma_gpu_direct/xdma/xdma_cdev.o /home/jeesoo/workspace/xdma_gpu_direct/xdma/cdev_ctrl.o /home/jeesoo/workspace/xdma_gpu_direct/xdma/cdev_events.o /home/jeesoo/workspace/xdma_gpu_direct/xdma/cdev_sgdma.o /home/jeesoo/workspace/xdma_gpu_direct/xdma/cdev_xvc.o /home/jeesoo/workspace/xdma_gpu_direct/xdma/cdev_bypass.o /home/jeesoo/workspace/xdma_gpu_direct/xdma/xdma_mod.o
