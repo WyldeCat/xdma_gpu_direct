@@ -118,6 +118,11 @@ static int check_transfer_align(struct xdma_engine *engine,
 }
 
 #ifdef GPU_DIRECT
+#define GPU_BOUND_SHIFT   16
+#define GPU_BOUND_SIZE    ((u64)1 << GPU_BOUND_SHIFT)
+#define GPU_BOUND_OFFSET  (GPU_BOUND_SIZE-1)
+#define GPU_BOUND_MASK    (~GPU_BOUND_OFFSET)
+
 static inline void xdma_io_cb_release_nvidia(struct xdma_io_cb_nvidia *cb)
 {
 	// TODO
@@ -128,21 +133,89 @@ static void char_sgdma_unmap_user_buf_nvidia(struct xdma_io_cb_nvidia *cb,
 	bool write)
 {
 	// TODO
-	return;	
+	return;
+}
+
+static void char_sgdma_unmap_user_buf_void_nvidia(void *cb)
+{
+	// TODO
+	return;
 }
 
 static int char_sgdma_map_user_buf_to_sgl_nvidia(struct xdma_io_cb_nvidia *cb,
-	bool write)
+	bool write, struct pci_dev *pdev)
 {
-	// TODO
-	return -EINVAL;
+	struct sg_table *sgt = &cb->sgt;
+	struct scatterlist *sg;
+	unsigned long len = cb->len;
+	void *buf = cb->buf;
+	u64 virt_start;
+	size_t pin_size;
+	size_t num_pages;
+	int rv, i;
+
+	virt_start = (u64)buf & GPU_BOUND_MASK;
+	pin_size = (u64)buf + cb->len - virt_start;
+
+	rv = nvidia_p2p_get_pages(0, 0, virt_start, pin_size, &cb->page_table,
+		&char_sgdma_unmap_user_buf_void_nvidia, cb);
+	if (rv != 0) {
+		pr_err("unable to get nvidia pages %llu %zu.\n",
+			virt_start, pin_size);
+		return -EINVAL;
+	} else if (!NVIDIA_P2P_PAGE_TABLE_VERSION_COMPATIBLE(cb->page_table)) {
+		pr_err("page table compatibility check failed.\n");
+		return -EINVAL;
+	}
+
+	rv = nvidia_p2p_dma_map_pages(pdev, cb->page_table, &cb->dma_mapping);
+	if (rv != 0) {
+		pr_err("unable to map nvidia pages %p.\n", cb->page_table);
+		return -EINVAL;
+	} else if (!NVIDIA_P2P_DMA_MAPPING_VERSION_COMPATIBLE(cb->dma_mapping)) {
+		pr_err("dma mapping compatibility check failed.\n");
+		return -EINVAL;
+	}
+
+	if (cb->page_table->entries != cb->dma_mapping->entries) {
+		pr_err("number of entries are different "
+			"btw page table and dma mapping");
+		return -EINVAL;
+	}
+	if (sg_alloc_table(sgt, cb->page_table->entries, GFP_KERNEL)) {
+		pr_err("sgl OOM.\n");
+		return -ENOMEM;
+	}
+
+	num_pages = cb->page_table->entries;
+	sg = sgt->sgl;
+	for (i = 0; i < num_pages; i++, sg = sg_next(sg)) {
+		unsigned int offset = (u64)buf & GPU_BOUND_OFFSET;
+		unsigned int nbytes = min_t(unsigned int, GPU_BOUND_SIZE - offset, len);
+
+		sg->dma_address = cb->dma_mapping->dma_addresses[i];
+		sg->offset = offset;
+		sg->length = len;
+
+		buf += nbytes;
+		len -= nbytes;
+	}
+
+	if (len != 0) {
+		pr_err("failed to set sgl properly. len : %lu\n", len);
+		return -EINVAL;
+	}
+
+	cb->pages_nr = num_pages;
+
+	// TODO unmap pages and mapping when error occur after alloc
+	return 0;
 }
 
 static ssize_t char_sgdma_read_write_nvidia(struct file *file, char __user *buf,
 		size_t count, loff_t *pos, bool write)
 {
 	int rv;
-	ssize_t res = 0;
 	struct xdma_cdev *xcdev = (struct xdma_cdev *)file->private_data;
 	struct xdma_dev *xdev;
 	struct xdma_engine *engine;
@@ -170,7 +243,16 @@ static ssize_t char_sgdma_read_write_nvidia(struct file *file, char __user *buf,
 		pr_info("Invalid transfer alignment detected\n");
 		return rv;
 	}
-	// TODO
+
+	memset(&cb, 0, sizeof(struct xdma_io_cb_nvidia));
+	cb.buf = buf;
+	cb.len = count;
+	rv = char_sgdma_map_user_buf_to_sgl_nvidia(&cb, write, xdev->pdev);
+	if (rv < 0)
+		return rv;
+
+	// TODO xfer submit, unmap sgdma
+
 	return -EINVAL;
 }
 

@@ -105,6 +105,7 @@ struct xdma_io_cb_nvidia {
 	unsigned int pages_nr;
 	struct sg_table sgt;
 	nvidia_p2p_page_table_t *page_table;
+	nvidia_p2p_dma_mapping_t *dma_mapping;
 };
 #endif /* ifdef GPU_DIRECT */
 
