@@ -1,5 +1,10 @@
 .*.swp
 *.o
 *.o.cmd
+*.cmd
+*.mod
+*/modules.order
+*/Module.symvers
 *.o.ur-safe
+*.mod.c
 *.ko

@@ -125,6 +125,10 @@ int xdma_user_isr_disable(void *dev_hndl, unsigned int mask);
  */
 ssize_t xdma_xfer_submit(void *dev_hndl, int channel, bool write, u64 ep_addr,
 			struct sg_table *sgt, bool dma_mapped, int timeout_ms);
-			
+
+ssize_t xdma_xfer_submit_nvidia(void *dev_hndl, int channel, bool write,
+			u64 ep_addr, struct sg_table *sgt, bool dma_mapped,
+			int timeout_ms);
 
 #endif
+

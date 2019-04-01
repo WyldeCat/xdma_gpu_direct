@@ -216,6 +216,7 @@ static ssize_t char_sgdma_read_write_nvidia(struct file *file, char __user *buf,
 		size_t count, loff_t *pos, bool write)
 {
 	int rv;
+	ssize_t res = 0;
 	struct xdma_cdev *xcdev = (struct xdma_cdev *)file->private_data;
 	struct xdma_dev *xdev;
 	struct xdma_engine *engine;
@@ -247,13 +248,16 @@ static ssize_t char_sgdma_read_write_nvidia(struct file *file, char __user *buf,
 	memset(&cb, 0, sizeof(struct xdma_io_cb_nvidia));
 	cb.buf = buf;
 	cb.len = count;
-	rv = char_sgdma_map_user_buf_to_sgl_nvidia(&cb, write, xdev->pdev);
-	if (rv < 0)
-		return rv;
 
-	// TODO xfer submit, unmap sgdma
-	pr_err("end of read write nvidia");
-	return -EINVAL;
+	rv = char_sgdma_map_user_buf_to_sgl_nvidia(&cb, write, xdev->pdev);
+	if (rv < 0) return rv;
+
+	res = xdma_xfer_submit_nvidia(xdev, engine->channel, write, *pos,
+		&cb.sgt, 0, sgdma_timeout * 1000);
+
+	// TODO unmap sgdma
+
+	return res;
 }
 
 static ssize_t char_sgdma_write_nvidia(struct file *file, const char __user *buf,
@@ -434,7 +438,7 @@ static ssize_t char_sgdma_read_write(struct file *file, char __user *buf,
 		return rv;
 
 	res = xdma_xfer_submit(xdev, engine->channel, write, *pos, &cb.sgt,
-				0, sgdma_timeout * 1000);	
+				0, sgdma_timeout * 1000);
 	//pr_err("xfer_submit return=%lld.\n", (s64)res);
 
 	//interrupt_status(xdev);

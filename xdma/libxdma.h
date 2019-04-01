@@ -599,3 +599,4 @@ ssize_t xdma_engine_read_cyclic(struct xdma_engine *, char __user *, size_t,
 int engine_addrmode_set(struct xdma_engine *engine, unsigned long arg);
 
 #endif /* XDMA_LIB_H */
+
