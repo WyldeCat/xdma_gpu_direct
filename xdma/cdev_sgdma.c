@@ -193,11 +193,13 @@ static int char_sgdma_map_user_buf_to_sgl_nvidia(struct xdma_io_cb_nvidia *cb,
 		unsigned int offset = (u64)buf & GPU_BOUND_OFFSET;
 		unsigned int nbytes = min_t(unsigned int, GPU_BOUND_SIZE - offset, len);
 
-		sg->dma_address = cb->dma_mapping->dma_addresses[i];
+		sg->dma_address = cb->dma_mapping->dma_addresses[i] + offset;
 		sg->dma_length = nbytes;
 		sg->offset = offset;
 		sg->length = len;
 
+		dbg_tfr("dma addr %llx, dma_length %u, offset %u, length %u.\n", sg->dma_address,
+			sg->dma_length, sg->offset, sg->length);
 		buf += nbytes;
 		len -= nbytes;
 	}
@@ -270,8 +272,25 @@ static ssize_t char_sgdma_write_nvidia(struct file *file, const char __user *buf
 static ssize_t char_sgdma_read_nvidia(struct file *file, char __user *buf,
 		size_t count, loff_t *pos)
 {
-	// TODO
-	return -EINVAL;
+	struct xdma_cdev *xcdev = (struct xdma_cdev *)file->private_data;
+	struct xdma_engine *engine;
+	int rv;
+
+	rv = xcdev_check(__func__, xcdev, 1);
+	if (rv < 0)
+		return rv;
+
+	engine = xcdev->engine;
+
+	if (engine->streaming && engine->dir == DMA_FROM_DEVICE) {
+		rv = xdma_cyclic_transfer_setup(engine);
+		if (rv < 0 && rv != -EBUSY)
+			return rv;
+		/* 600 sec. timeout */
+		return xdma_engine_read_cyclic(engine, buf, count, 600000);
+	}
+
+        return char_sgdma_read_write_nvidia(file, (char *)buf, count, pos, 0);
 }
 
 #endif /* GPU_DIRECT */
@@ -702,10 +721,11 @@ static const struct file_operations sgdma_fops = {
 	.release = char_sgdma_close,
 #ifdef GPU_DIRECT
 	.write = char_sgdma_write_nvidia,
+	.read = char_sgdma_read_nvidia,
 #else
 	.write = char_sgdma_write,
-#endif
 	.read = char_sgdma_read,
+#endif
 	.unlocked_ioctl = char_sgdma_ioctl,
 	.llseek = char_sgdma_llseek,
 };
