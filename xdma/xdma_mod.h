@@ -99,14 +99,20 @@ struct xdma_io_cb {
 };
 
 #ifdef GPU_DIRECT
+
+struct map_info {
+	void *buf_base;
+	nvidia_p2p_page_table_t *page_table;
+	nvidia_p2p_dma_mapping_t *dma_mapping;
+	unsigned int pages_nr;
+};
+
 struct xdma_io_cb_nvidia {
 	void __user *buf;
 	size_t len;
-	unsigned int pages_nr;
 	struct sg_table sgt;
-	nvidia_p2p_page_table_t *page_table;
-	nvidia_p2p_dma_mapping_t *dma_mapping;
 };
+
 #endif /* ifdef GPU_DIRECT */
 
 #endif /* ifndef __XDMA_MODULE_H__ */
