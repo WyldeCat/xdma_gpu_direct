@@ -126,34 +126,67 @@ static int check_transfer_align(struct xdma_engine *engine,
 #define GPU_BOUND_OFFSET  (GPU_BOUND_SIZE-1)
 #define GPU_BOUND_MASK    (~GPU_BOUND_OFFSET)
 
-static inline void xdma_io_cb_release_nvidia(struct xdma_io_cb_nvidia *cb)
-{
-	// TODO
-	return;	
-}
+void cb_release_map_info(void *pmap_info);
+fa_cache_t pmap_info_cache = {
+	.entries = {{0, }, },
+	.cursor = 0,
+	.swap_out_cb = &cb_release_map_info,
+};
 
-static void char_sgdma_unmap_user_buf_nvidia(struct xdma_io_cb_nvidia *cb,
-	bool write)
+static void char_sgdma_unmap_user_buf_nvidia(struct xdma_io_cb_nvidia *cb)
 {
-	// TODO
+	int rv; 
+
+	sg_free_table(&cb->sgt);
+
+	rv = nvidia_p2p_free_dma_mapping(cb->dma_mapping);
+	if (rv < 0) {
+		pr_err("unable to free nvidia dma mapping.\n");
+	}
+
 	return;
 }
 
-static void char_sgdma_unmap_user_buf_void_nvidia(void *cb)
+static void cb_nvidia_p2p_get_pages(void *pmap_info)
 {
-	// TODO
+	struct page_map_info *pmap_info_ = pmap_info;
+	int rv;
+
+	fa_cache_delete_entry(&pmap_info_cache, (u64)(pmap_info_->buf_base));
+
+	rv = nvidia_p2p_free_page_table(pmap_info_->page_table);
+	if (rv != 0) {
+		pr_err("unable to free nvidia page table %p %p.\n",
+			pmap_info_->buf_base, pmap_info_->page_table);
+	}
+
+	kfree(pmap_info);
 	return;
 }
 
-struct map_info *get_nvidia_map_info(void *buf, unsigned long len,
-	struct pci_dev *pdev)
+void cb_release_map_info(void *pmap_info)
 {
-	static fa_cache_t map_info_cache = {
-		.entries = {{0, }, },
-		.cursor = 0
-	};
+	struct page_map_info *pmap_info_ = pmap_info;
+	int rv;
 
-	struct map_info *ret = NULL;
+	rv = nvidia_p2p_put_pages(0, 0, (u64)pmap_info_->buf_base, pmap_info_->page_table);
+	if (rv != 0) {
+		pr_err("unable to put nvidia page table %p %p.\n",
+			pmap_info_->buf_base, pmap_info_->page_table);
+	}
+	rv = nvidia_p2p_free_page_table(pmap_info_->page_table);
+	if (rv != 0) {
+		pr_err("unable to free nvidia page table %p %p.\n",
+			pmap_info_->buf_base, pmap_info_->page_table);
+	}
+
+	kfree(pmap_info);
+}
+
+struct page_map_info *get_nvidia_map_info(void *buf, unsigned long len,
+	nvidia_p2p_dma_mapping_t **dma_mapping, struct pci_dev *pdev)
+{
+	struct page_map_info *ret = NULL;
 	void *buf_base;
 	size_t buf_size;
 	int rv;
@@ -169,15 +202,15 @@ struct map_info *get_nvidia_map_info(void *buf, unsigned long len,
 	buf_size = len;
 
 	buf_size += (u64)buf_base & GPU_BOUND_OFFSET;
-	buf_base = (u64)buf_base & GPU_BOUND_MASK;
+	buf_base = (void *)((u64)buf_base & GPU_BOUND_MASK);
 
-	ret = fa_cache_find_entry(&map_info_cache, (u64)buf_base);
+	ret = (struct page_map_info *)fa_cache_find_entry(&pmap_info_cache, (u64)buf_base);
 	if (ret == NULL) {
-		ret = (struct map_info *)kmalloc(sizeof(struct map_info), GFP_KERNEL);
+		ret = (struct page_map_info *)kmalloc(sizeof(struct page_map_info), GFP_KERNEL);
 		ret->buf_base = buf_base;
 
-		rv = nvidia_p2p_get_pages(0, 0, buf_base, buf_size, &ret->page_table,
-			&char_sgdma_unmap_user_buf_void_nvidia, ret);
+		rv = nvidia_p2p_get_pages(0, 0, (u64)buf_base, buf_size, &ret->page_table,
+			&cb_nvidia_p2p_get_pages, ret);
 		if (rv != 0) {
 			pr_err("unable to get nvidia pages %p %zu.\n",
 				buf_base, buf_size);
@@ -187,65 +220,64 @@ struct map_info *get_nvidia_map_info(void *buf, unsigned long len,
 			return NULL;
 		}
 
-		rv = nvidia_p2p_dma_map_pages(pdev, ret->page_table, &ret->dma_mapping);
-		if (rv != 0) {
-			pr_err("unable to map nvidia pages %p.\n", ret->page_table);
-			return NULL;
-		} else if (!NVIDIA_P2P_DMA_MAPPING_VERSION_COMPATIBLE(ret->dma_mapping)) {
-			pr_err("dma mapping compatibility check failed.\n");
-			return NULL;
-		}
-
-		if (ret->page_table->entries != ret->dma_mapping->entries) {
-			// TODO
-			pr_err("number of entries are different "
-				"btw page table and dma mapping.\n");
-			return NULL;
-		} else if (ret->page_table->page_size != 1 ||
-			(ret->dma_mapping->page_size_type != NVIDIA_P2P_PAGE_SIZE_64KB)) {
-
-			pr_err("page size is not 64KB %u %u.\n",
-				ret->page_table->page_size,
-				ret->dma_mapping->page_size_type);
-			return NULL;
-		}
-		ret->pages_nr = ret->page_table->entries;
-
-		fa_cache_insert_entry(&map_info_cache, (u64)buf_base, ret);
+		fa_cache_insert_entry(&pmap_info_cache, (u64)buf_base, ret);
 	}
+
+	rv = nvidia_p2p_dma_map_pages(pdev, ret->page_table, dma_mapping);
+	if (rv != 0) {
+		pr_err("unable to map nvidia pages %p.\n", ret->page_table);
+		return NULL;
+	} else if (!NVIDIA_P2P_DMA_MAPPING_VERSION_COMPATIBLE(*dma_mapping)) {
+		pr_err("dma mapping compatibility check failed.\n");
+		return NULL;
+	}
+
+	if (ret->page_table->entries != (*dma_mapping)->entries) {
+		pr_err("number of entries are different "
+			"btw page table and dma mapping.\n");
+		return NULL;
+	} else if (ret->page_table->page_size != 1 ||
+		((*dma_mapping)->page_size_type != NVIDIA_P2P_PAGE_SIZE_64KB)) {
+
+		pr_err("page size is not 64KB %u %u.\n",
+			ret->page_table->page_size,
+			(*dma_mapping)->page_size_type);
+		return NULL;
+	}
+	ret->pages_nr = ret->page_table->entries;
 
 	return ret;
 }
-
 
 static int char_sgdma_map_user_buf_to_sgl_nvidia(struct xdma_io_cb_nvidia *cb,
 	bool write, struct pci_dev *pdev)
 {
 	struct sg_table *sgt = &cb->sgt;
 	struct scatterlist *sg;
-	struct map_info *map_info;
+	struct page_map_info *pmap_info;
 
 	unsigned long len = cb->len;
 	void *buf = cb->buf;
 	void *cursor;
-	int rv, i;
-	int sp, ep;
+	int i, sp, ep;
 
 	nvidia_p2p_page_table_t *page_table;
 	nvidia_p2p_dma_mapping_t *dma_mapping;
 
-	if ((map_info = get_nvidia_map_info(buf, len, pdev)) == NULL) {
+	if ((pmap_info = get_nvidia_map_info(buf, len,
+		&cb->dma_mapping, pdev)) == NULL) {
+
 		pr_err("failed to get map_info : %p\n", buf);
 		return -EINVAL;
 	}
 
-	page_table = map_info->page_table;
-	dma_mapping = map_info->dma_mapping;
+	page_table = pmap_info->page_table;
+	dma_mapping = cb->dma_mapping;
 
 	sp = ep = -1;
-	cursor = map_info->buf_base;
+	cursor = pmap_info->buf_base;
 
-	for (i = 0; i < map_info->pages_nr; i++) {
+	for (i = 0; i < pmap_info->pages_nr; i++) {
 		if (cursor <= buf && buf < cursor + GPU_BOUND_SIZE) {
 			sp = i;
 		}
@@ -260,7 +292,7 @@ static int char_sgdma_map_user_buf_to_sgl_nvidia(struct xdma_io_cb_nvidia *cb,
 	if (sp == -1 || ep == -1) {
 		pr_err("unable to find sp and ep %d %d, page_size %u, "
 			"buf_base %p.\n", sp, ep, page_table->page_size,
-			map_info->buf_base);
+			pmap_info->buf_base);
 		return -EINVAL;
 	}
 
@@ -290,7 +322,6 @@ static int char_sgdma_map_user_buf_to_sgl_nvidia(struct xdma_io_cb_nvidia *cb,
 		return -EINVAL;
 	}
 
-	// TODO unmap pages and mapping when error occur after alloc
 	return 0;
 }
 
@@ -337,7 +368,7 @@ static ssize_t char_sgdma_read_write_nvidia(struct file *file, char __user *buf,
 	res = xdma_xfer_submit(xdev, engine->channel, write, *pos,
 		&cb.sgt, 1, sgdma_timeout * 1000);
 
-	// TODO unmap sgdma
+	char_sgdma_unmap_user_buf_nvidia(&cb);
 
 	return res;
 }

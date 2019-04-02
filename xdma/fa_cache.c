@@ -26,6 +26,7 @@ void fa_cache_insert_entry(fa_cache_t *cache, u64 key, void *data)
 		}
 	}
 
+	(*(cache->swap_out_cb))(cache->entries[cache->cursor].data);
 	cache->entries[cache->cursor] = new_entry;
 	cache->cursor = (cache->cursor + 1) % NUM_FA_CACHE_ENTRIES;
 }

@@ -20,6 +20,7 @@ typedef struct cache_entry {
 typedef struct fa_cache {
 	cache_entry_t entries[NUM_FA_CACHE_ENTRIES];
 	u32 cursor;
+	void (*swap_out_cb)(void *);
 } fa_cache_t;
 
 void *fa_cache_find_entry(fa_cache_t *cache, u64 key);
