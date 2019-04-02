@@ -118,11 +118,19 @@ static int check_transfer_align(struct xdma_engine *engine,
 }
 
 #ifdef GPU_DIRECT
+
+#include "fa_cache.h"
+
 #define GPU_BOUND_SHIFT   16
 #define GPU_BOUND_SIZE    ((u64)1 << GPU_BOUND_SHIFT)
 #define GPU_BOUND_OFFSET  (GPU_BOUND_SIZE-1)
 #define GPU_BOUND_MASK    (~GPU_BOUND_OFFSET)
 
+fa_cache_t gbinfo_cache = {
+	.entries = {0, },
+	.cursor = 0
+};
+ 
 static inline void xdma_io_cb_release_nvidia(struct xdma_io_cb_nvidia *cb)
 {
 	// TODO
@@ -715,6 +723,7 @@ static int char_sgdma_close(struct inode *inode, struct file *file)
 
 	return 0;
 }
+
 static const struct file_operations sgdma_fops = {
 	.owner = THIS_MODULE,
 	.open = char_sgdma_open,
