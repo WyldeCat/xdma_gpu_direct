@@ -309,7 +309,7 @@ static int char_sgdma_map_user_buf_to_sgl_nvidia(struct xdma_io_cb_nvidia *cb,
 		sg->dma_address = dma_mapping->dma_addresses[i] + offset;
 		sg->dma_length = nbytes;
 		sg->offset = offset;
-		sg->length = len;
+		sg->length = nbytes;
 
 		dbg_tfr("dma addr %llx, dma_length %u, offset %u, length %u.\n", sg->dma_address,
 			sg->dma_length, sg->offset, sg->length);

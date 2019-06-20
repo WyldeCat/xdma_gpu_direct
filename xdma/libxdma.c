@@ -1465,10 +1465,15 @@ static int map_single_bar(struct xdma_dev *xdev, struct pci_dev *dev, int idx)
 	resource_size_t bar_start;
 	resource_size_t bar_len;
 	resource_size_t map_len;
+	unsigned long flags;
 
 	bar_start = pci_resource_start(dev, idx);
 	bar_len = pci_resource_len(dev, idx);
 	map_len = bar_len;
+
+	flags = pci_resource_flags(dev, idx);
+	pr_info("BAR %d resource flags are : %lu, IORESOURCE_MEM_64 : %d\n",
+		idx, flags, (flags | IORESOURCE_MEM_64) > 0);
 
 	xdev->bar[idx] = NULL;
 
@@ -2782,9 +2787,11 @@ static int transfer_build(struct xdma_engine *engine,
 	int j = 0;
 
 	for (; i < desc_max; i++, j++, sdesc++) {
+		/*
 		dbg_desc("sw desc %d/%u: 0x%llx, 0x%x, ep 0x%llx.\n",
 			i + req->sw_desc_idx, req->sw_desc_cnt,
 			sdesc->addr, sdesc->len, req->ep_addr);
+		*/
 
 		/* fill in descriptor entry j with transfer details */
 		xdma_desc_set(xfer->desc_virt + j, sdesc->addr, req->ep_addr,
